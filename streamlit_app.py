@@ -263,8 +263,7 @@ df = fetch_history(hours)
 
 HOVER_T = "%{x|%Y-%m-%d %H:%M:%S WIB}<br>%{y}<extra></extra>"
 
-# Filter rows where Modbus electric read failed (voltage=0 means no data)
-df_clean = df[df["voltage"].astype(float) > 0] if not df.empty else df
+df_clean = df
 
 if df.empty:
     st.info("No data yet — ESP32 will start logging once the sketch is uploaded.")
