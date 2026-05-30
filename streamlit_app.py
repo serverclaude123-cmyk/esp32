@@ -164,6 +164,21 @@ def kwh_bar(df_energy: pd.DataFrame, freq: str, title: str, x_fmt: str, hover_pr
 st.set_page_config(page_title="Hongfa MCB", page_icon="⚡", layout="wide")
 st.title("⚡ Hongfa Smart MCB Dashboard")
 
+# ---- Device online/offline indicator ----
+def device_status(ts_utc_str: str, timeout_sec: int = 120):
+    """Returns (online, elapsed_str). Offline if last update > timeout_sec ago."""
+    if not ts_utc_str:
+        return False, "never"
+    last = pd.to_datetime(ts_utc_str, utc=True)
+    elapsed = (datetime.now(timezone.utc) - last.to_pydatetime()).total_seconds()
+    if elapsed < 60:
+        age = f"{int(elapsed)}s ago"
+    elif elapsed < 3600:
+        age = f"{int(elapsed//60)}m {int(elapsed%60)}s ago"
+    else:
+        age = f"{int(elapsed//3600)}h {int((elapsed%3600)//60)}m ago"
+    return elapsed <= timeout_sec, age
+
 with st.sidebar:
     st.header("Settings")
     hours = st.selectbox(
@@ -187,6 +202,13 @@ if ts:
     ts_wib = dt_utc.tz_convert(TZ).strftime("%Y-%m-%d %H:%M:%S WIB")
 else:
     ts_wib = "—"
+
+# ---- Device online/offline banner ----
+online, age = device_status(ts)
+if online:
+    st.success(f"🟢 ESP32 ONLINE — last data {age}")
+else:
+    st.error(f"🔴 ESP32 OFFLINE — last data {age}  |  Check power / WiFi")
 
 # ---- Status row ----
 c1, c2, c3, c4, c5 = st.columns(5)
