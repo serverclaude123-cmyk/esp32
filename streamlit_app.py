@@ -206,9 +206,9 @@ else:
 # ---- Device online/offline banner ----
 online, age = device_status(ts)
 if online:
-    st.success(f"🟢 ESP32 ONLINE — last data {age}")
+    st.success(f"🟢 GATEWAY ONLINE — last data {age}")
 else:
-    st.error(f"🔴 ESP32 OFFLINE — last data {age}  |  Check power / WiFi")
+    st.error(f"🔴 GATEWAY OFFLINE — last data {age}  |  Check power / WiFi")
 
 # ---- Status row ----
 c1, c2, c3, c4, c5 = st.columns(5)
@@ -288,7 +288,7 @@ HOVER_T = "%{x|%Y-%m-%d %H:%M:%S WIB}<br>%{y}<extra></extra>"
 df_clean = df
 
 if df.empty:
-    st.info("No data yet — ESP32 will start logging once the sketch is uploaded.")
+    st.info("No data yet — GATEWAY will start logging once the sketch is uploaded.")
 else:
     t1, t2, t3, t4 = st.tabs(["Current & Voltage", "Power & Energy", "Frequency & PF", "Table"])
 
