@@ -206,13 +206,13 @@ st.divider()
 # ---- Gauges ----
 g1, g2, g3, g4 = st.columns(4)
 with g1:
-    st.plotly_chart(gauge("Current",      latest.get("current"),   "A",  0,  63,  warn=50,  fmt=".2f"), use_container_width=True)
+    st.plotly_chart(gauge("Current",      latest.get("current"),   "A",  0,  63,  warn=50,  fmt=".2f"), use_container_width=True, key="g_current")
 with g2:
-    st.plotly_chart(gauge("Voltage",      latest.get("voltage"),   "V",  0,  260, warn=242, fmt=".1f"), use_container_width=True)
+    st.plotly_chart(gauge("Voltage",      latest.get("voltage"),   "V",  0,  260, warn=242, fmt=".1f"), use_container_width=True, key="g_voltage")
 with g3:
-    st.plotly_chart(gauge("Active Power", latest.get("power"),     "W",  0,  7000,           fmt=".0f"), use_container_width=True)
+    st.plotly_chart(gauge("Active Power", latest.get("power"),     "W",  0,  7000,           fmt=".0f"), use_container_width=True, key="g_power")
 with g4:
-    st.plotly_chart(gauge("Frequency",    latest.get("frequency"), "Hz", 45, 55,  warn=51,  fmt=".2f"), use_container_width=True)
+    st.plotly_chart(gauge("Frequency",    latest.get("frequency"), "Hz", 45, 55,  warn=51,  fmt=".2f"), use_container_width=True, key="g_freq")
 
 e1, e2 = st.columns(2)
 with e1:
@@ -228,11 +228,11 @@ df_e31 = fetch_energy_history(31)
 
 ek1, ek2, ek3 = st.columns(3)
 with ek1:
-    st.plotly_chart(kwh_bar(df_e31, "D",  "Daily kWh"),   use_container_width=True)
+    st.plotly_chart(kwh_bar(df_e31, "D",  "Daily kWh"),   use_container_width=True, key="kwh_daily")
 with ek2:
-    st.plotly_chart(kwh_bar(df_e31, "W",  "Weekly kWh"),  use_container_width=True)
+    st.plotly_chart(kwh_bar(df_e31, "W",  "Weekly kWh"),  use_container_width=True, key="kwh_weekly")
 with ek3:
-    st.plotly_chart(kwh_bar(df_e31, "ME", "Monthly kWh"), use_container_width=True)
+    st.plotly_chart(kwh_bar(df_e31, "ME", "Monthly kWh"), use_container_width=True, key="kwh_monthly")
 
 st.divider()
 
@@ -258,7 +258,7 @@ else:
         fig.update_layout(yaxis=dict(title="A"), yaxis2=dict(title="V", overlaying="y", side="right"),
                           legend=dict(orientation="h"), height=350, margin=dict(t=10),
                           hovermode="x unified")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key="hist_cv")
 
     with t2:
         fig2 = go.Figure()
@@ -271,7 +271,7 @@ else:
         fig2.update_layout(yaxis=dict(title="W"), yaxis2=dict(title="kWh", overlaying="y", side="right"),
                            legend=dict(orientation="h"), height=350, margin=dict(t=10),
                            hovermode="x unified")
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, use_container_width=True, key="hist_pe")
 
     with t3:
         fig3 = go.Figure()
@@ -284,7 +284,7 @@ else:
         fig3.update_layout(yaxis=dict(title="Hz"), yaxis2=dict(title="PF", overlaying="y", side="right"),
                            legend=dict(orientation="h"), height=350, margin=dict(t=10),
                            hovermode="x unified")
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, use_container_width=True, key="hist_fp")
 
     with t4:
         cols = ["created_at", "switch_status", "current", "voltage", "temperature",
