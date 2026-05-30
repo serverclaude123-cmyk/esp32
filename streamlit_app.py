@@ -68,16 +68,30 @@ def fetch_history(hours: int) -> pd.DataFrame:
         return pd.DataFrame()
     return _to_jkt(pd.DataFrame(data))
 
-def fetch_energy_history(days: int) -> pd.DataFrame:
-    """Fetch energy data for bar charts (up to 31 days)."""
-    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-    data = _sb_get({"select": "created_at,energy", "created_at": f"gte.{since}",
-                    "order": "created_at.asc", "limit": "5000"})
+def fetch_energy_since(since_iso: str) -> pd.DataFrame:
+    """Fetch energy column from a given UTC ISO timestamp to now."""
+    data = _sb_get({"select": "created_at,energy", "created_at": f"gte.{since_iso}",
+                    "order": "created_at.asc", "limit": "10000"})
     if not data:
         return pd.DataFrame()
     df = _to_jkt(pd.DataFrame(data))
     df["energy"] = pd.to_numeric(df["energy"], errors="coerce").fillna(0)
-    return df
+    return df[df["energy"] > 0]   # skip rows where Modbus read failed
+
+def start_of_today_utc() -> str:
+    now_jkt = datetime.now(timezone.utc).astimezone(__import__("zoneinfo").ZoneInfo(TZ))
+    sod = now_jkt.replace(hour=0, minute=0, second=0, microsecond=0)
+    return sod.astimezone(timezone.utc).isoformat()
+
+def start_of_month_utc() -> str:
+    now_jkt = datetime.now(timezone.utc).astimezone(__import__("zoneinfo").ZoneInfo(TZ))
+    som = now_jkt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return som.astimezone(timezone.utc).isoformat()
+
+def start_of_year_utc() -> str:
+    now_jkt = datetime.now(timezone.utc).astimezone(__import__("zoneinfo").ZoneInfo(TZ))
+    soy = now_jkt.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    return soy.astimezone(timezone.utc).isoformat()
 
 # ---- Gauge ----
 def gauge(title, value, unit, lo, hi, warn=None, fmt=".2f"):
@@ -102,31 +116,29 @@ def gauge(title, value, unit, lo, hi, warn=None, fmt=".2f"):
     return fig
 
 # ---- kWh bar chart helper ----
-def kwh_bar(df_energy: pd.DataFrame, freq: str, title: str) -> go.Figure:
-    """
-    freq: 'D' = daily, 'W' = weekly, 'ME' = monthly
-    Energy is cumulative — consumption per period = max - min within period.
-    """
+def kwh_bar(df_energy: pd.DataFrame, freq: str, title: str, x_fmt: str, hover_prefix: str) -> go.Figure:
+    """Energy is cumulative — consumption per period = max - min within period."""
     if df_energy.empty:
-        return go.Figure()
+        fig = go.Figure()
+        fig.update_layout(title=title, height=320,
+                          annotations=[dict(text="No data yet", showarrow=False,
+                                           font=dict(size=14), xref="paper", yref="paper", x=0.5, y=0.5)])
+        return fig
 
-    grp = df_energy.set_index("created_at").resample(freq)["energy"]
-    kwh = (grp.max() - grp.min()).reset_index()
+    grp  = df_energy.set_index("created_at").resample(freq)["energy"]
+    kwh  = (grp.max() - grp.min()).reset_index()
     kwh.columns = ["period", "kwh"]
-    kwh = kwh[kwh["kwh"] > 0]
+    kwh  = kwh[kwh["kwh"] > 0]
 
     if kwh.empty:
-        return go.Figure()
+        fig = go.Figure()
+        fig.update_layout(title=title, height=320,
+                          annotations=[dict(text="No data yet", showarrow=False,
+                                           font=dict(size=14), xref="paper", yref="paper", x=0.5, y=0.5)])
+        return fig
 
-    if freq == "D":
-        label = kwh["period"].dt.strftime("%d %b %Y")
-        hover = "Date: %{x}<br>kWh: %{y:.3f}<extra></extra>"
-    elif freq == "W":
-        label = kwh["period"].dt.strftime("Week %U<br>%d %b")
-        hover = "Week of: %{x}<br>kWh: %{y:.3f}<extra></extra>"
-    else:
-        label = kwh["period"].dt.strftime("%b %Y")
-        hover = "Month: %{x}<br>kWh: %{y:.3f}<extra></extra>"
+    label = kwh["period"].dt.strftime(x_fmt)
+    hover = f"{hover_prefix}: %{{x}}<br>kWh: %{{y:.3f}}<extra></extra>"
 
     fig = go.Figure(go.Bar(
         x=label,
@@ -224,15 +236,24 @@ st.divider()
 
 # ---- kWh Bar Charts ----
 st.subheader("⚡ Energy Consumption")
-df_e31 = fetch_energy_history(31)
+
+df_today = fetch_energy_since(start_of_today_utc())
+df_month = fetch_energy_since(start_of_month_utc())
+df_year  = fetch_energy_since(start_of_year_utc())
 
 ek1, ek2, ek3 = st.columns(3)
 with ek1:
-    st.plotly_chart(kwh_bar(df_e31, "D",  "Daily kWh"),   use_container_width=True, key="kwh_daily")
+    st.plotly_chart(
+        kwh_bar(df_today, "h",  "Today — Hourly kWh",   "%H:00",    "Hour"),
+        use_container_width=True, key="kwh_daily")
 with ek2:
-    st.plotly_chart(kwh_bar(df_e31, "W",  "Weekly kWh"),  use_container_width=True, key="kwh_weekly")
+    st.plotly_chart(
+        kwh_bar(df_month, "D",  "This Month — Daily kWh", "%d %b",  "Date"),
+        use_container_width=True, key="kwh_monthly")
 with ek3:
-    st.plotly_chart(kwh_bar(df_e31, "ME", "Monthly kWh"), use_container_width=True, key="kwh_monthly")
+    st.plotly_chart(
+        kwh_bar(df_year,  "ME", "This Year — Monthly kWh", "%b %Y", "Month"),
+        use_container_width=True, key="kwh_yearly")
 
 st.divider()
 
@@ -242,6 +263,9 @@ df = fetch_history(hours)
 
 HOVER_T = "%{x|%Y-%m-%d %H:%M:%S WIB}<br>%{y}<extra></extra>"
 
+# Filter rows where Modbus electric read failed (voltage=0 means no data)
+df_clean = df[df["voltage"].astype(float) > 0] if not df.empty else df
+
 if df.empty:
     st.info("No data yet — ESP32 will start logging once the sketch is uploaded.")
 else:
@@ -249,50 +273,48 @@ else:
 
     with t1:
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df["created_at"], y=df["current"], name="Current (A)",
+        fig.add_trace(go.Scatter(x=df_clean["created_at"], y=df_clean["current"], name="Current (A)",
                                  line=dict(color="#1976D2"),
                                  hovertemplate="%{x|%Y-%m-%d %H:%M:%S WIB}<br>Current: %{y:.3f} A<extra></extra>"))
-        fig.add_trace(go.Scatter(x=df["created_at"], y=df["voltage"], name="Voltage (V)", yaxis="y2",
+        fig.add_trace(go.Scatter(x=df_clean["created_at"], y=df_clean["voltage"], name="Voltage (V)", yaxis="y2",
                                  line=dict(color="#F57C00"),
                                  hovertemplate="%{x|%Y-%m-%d %H:%M:%S WIB}<br>Voltage: %{y:.1f} V<extra></extra>"))
         fig.update_layout(yaxis=dict(title="A"), yaxis2=dict(title="V", overlaying="y", side="right"),
-                          legend=dict(orientation="h"), height=350, margin=dict(t=10),
-                          hovermode="x unified")
+                          legend=dict(orientation="h"), height=350, margin=dict(t=10), hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True, key="hist_cv")
 
     with t2:
         fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=df["created_at"], y=df["power"], name="Power (W)", fill="tozeroy",
+        fig2.add_trace(go.Scatter(x=df_clean["created_at"], y=df_clean["power"], name="Power (W)", fill="tozeroy",
                                   line=dict(color="#43A047"),
                                   hovertemplate="%{x|%Y-%m-%d %H:%M:%S WIB}<br>Power: %{y:.1f} W<extra></extra>"))
-        fig2.add_trace(go.Scatter(x=df["created_at"], y=df["energy"], name="Energy (kWh)", yaxis="y2",
+        fig2.add_trace(go.Scatter(x=df_clean["created_at"], y=df_clean["energy"], name="Energy (kWh)", yaxis="y2",
                                   line=dict(color="#8E24AA"),
                                   hovertemplate="%{x|%Y-%m-%d %H:%M:%S WIB}<br>Energy: %{y:.3f} kWh<extra></extra>"))
         fig2.update_layout(yaxis=dict(title="W"), yaxis2=dict(title="kWh", overlaying="y", side="right"),
-                           legend=dict(orientation="h"), height=350, margin=dict(t=10),
-                           hovermode="x unified")
+                           legend=dict(orientation="h"), height=350, margin=dict(t=10), hovermode="x unified")
         st.plotly_chart(fig2, use_container_width=True, key="hist_pe")
 
     with t3:
         fig3 = go.Figure()
-        fig3.add_trace(go.Scatter(x=df["created_at"], y=df["frequency"], name="Frequency (Hz)",
+        fig3.add_trace(go.Scatter(x=df_clean["created_at"], y=df_clean["frequency"], name="Frequency (Hz)",
                                   line=dict(color="#00ACC1"),
                                   hovertemplate="%{x|%Y-%m-%d %H:%M:%S WIB}<br>Freq: %{y:.2f} Hz<extra></extra>"))
-        fig3.add_trace(go.Scatter(x=df["created_at"], y=df["power_factor"], name="Power Factor", yaxis="y2",
+        fig3.add_trace(go.Scatter(x=df_clean["created_at"], y=df_clean["power_factor"], name="Power Factor", yaxis="y2",
                                   line=dict(color="#E53935"),
                                   hovertemplate="%{x|%Y-%m-%d %H:%M:%S WIB}<br>PF: %{y:.3f}<extra></extra>"))
         fig3.update_layout(yaxis=dict(title="Hz"), yaxis2=dict(title="PF", overlaying="y", side="right"),
-                           legend=dict(orientation="h"), height=350, margin=dict(t=10),
-                           hovermode="x unified")
+                           legend=dict(orientation="h"), height=350, margin=dict(t=10), hovermode="x unified")
         st.plotly_chart(fig3, use_container_width=True, key="hist_fp")
 
     with t4:
         cols = ["created_at", "switch_status", "current", "voltage", "temperature",
                 "power", "energy", "frequency", "power_factor", "alarm", "trip"]
-        disp = df[cols].copy()
+        disp = df_clean[cols].copy()
         disp["created_at"] = disp["created_at"].dt.strftime("%Y-%m-%d %H:%M:%S WIB")
+        st.caption(f"Showing {len(disp)} rows with valid electric data (voltage > 0)")
         st.dataframe(disp.sort_values("created_at", ascending=False).head(200), use_container_width=True)
-        st.download_button("⬇ Download CSV", df.to_csv(index=False).encode(), "mcb_readings.csv", "text/csv")
+        st.download_button("⬇ Download CSV", df_clean.to_csv(index=False).encode(), "mcb_readings.csv", "text/csv")
 
 # ---- Auto-refresh ----
 time.sleep(REFRESH_SEC)
