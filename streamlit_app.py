@@ -164,12 +164,18 @@ def kwh_bar(df_energy: pd.DataFrame, freq: str, title: str, x_fmt: str, hover_pr
 st.set_page_config(page_title="Hongfa MCB", page_icon="⚡", layout="wide")
 st.title("⚡ Hongfa Smart MCB Dashboard")
 
-# ---- Device online/offline indicator ----
-def device_status(ts_utc_str: str, timeout_sec: int = 120):
-    """Returns (online, elapsed_str). Offline if last update > timeout_sec ago."""
+# ---- Device status indicator ----
+def device_status(ts_utc_str: str):
+    """
+    Returns (state, elapsed_str).
+    state: 'online' | 'reconnecting' | 'offline'
+    online       < 2 min  — posting normally
+    reconnecting 2–5 min  — WiFi connected but no internet / restarting
+    offline      > 5 min  — completely down
+    """
     if not ts_utc_str:
-        return False, "never"
-    last = pd.to_datetime(ts_utc_str, utc=True)
+        return "offline", "never"
+    last    = pd.to_datetime(ts_utc_str, utc=True)
     elapsed = (datetime.now(timezone.utc) - last.to_pydatetime()).total_seconds()
     if elapsed < 60:
         age = f"{int(elapsed)}s ago"
@@ -177,7 +183,12 @@ def device_status(ts_utc_str: str, timeout_sec: int = 120):
         age = f"{int(elapsed//60)}m {int(elapsed%60)}s ago"
     else:
         age = f"{int(elapsed//3600)}h {int((elapsed%3600)//60)}m ago"
-    return elapsed <= timeout_sec, age
+    if elapsed <= 120:
+        return "online", age
+    elif elapsed <= 300:
+        return "reconnecting", age
+    else:
+        return "offline", age
 
 with st.sidebar:
     st.header("Settings")
@@ -203,10 +214,12 @@ if ts:
 else:
     ts_wib = "—"
 
-# ---- Device online/offline banner ----
-online, age = device_status(ts)
-if online:
+# ---- Device status banner ----
+state, age = device_status(ts)
+if state == "online":
     st.success(f"🟢 GATEWAY ONLINE — last data {age}")
+elif state == "reconnecting":
+    st.warning(f"🟡 GATEWAY RECONNECTING — last data {age}  |  WiFi connected, waiting for internet...")
 else:
     st.error(f"🔴 GATEWAY OFFLINE — last data {age}  |  Check power / WiFi")
 
