@@ -161,8 +161,17 @@ def kwh_bar(df_energy: pd.DataFrame, freq: str, title: str, x_fmt: str, hover_pr
 # ================================================================
 # Page
 # ================================================================
-st.set_page_config(page_title="Hongfa MCB", page_icon="⚡", layout="wide")
-st.title("⚡ Hongfa Smart MCB Dashboard")
+st.set_page_config(page_title="Rajawali Smart MCB", page_icon="⚡", layout="wide")
+
+# ---- Header with logo ----
+col_logo, col_title = st.columns([1, 5])
+with col_logo:
+    try:
+        st.image("LOGO RAJAWALI KONTROL UTAMA.png", width=100)
+    except Exception:
+        st.write("⚡")
+with col_title:
+    st.title("⚡ Rajawali Smart MCB Dashboard")
 
 # ---- Device status indicator ----
 def device_status(ts_utc_str: str):
