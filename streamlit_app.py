@@ -29,7 +29,7 @@ SB_HDRS = {
     "Authorization": f"Bearer {SB_KEY}",
     "Content-Type":  "application/json",
 }
-REFRESH_SEC = 5
+REFRESH_SEC = 30
 
 # ---- Supabase REST helpers ----
 def _sb_get(params: dict):
